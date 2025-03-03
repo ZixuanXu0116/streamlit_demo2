@@ -21,7 +21,7 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_percenta
 @st.cache_data
 def load_data():
     # Update these to match your S3 bucket and file path
-    s3_bucket = "<streamlittest0303>"  # e.g., "my-awesome-bucket"
+    s3_bucket = "streamlittest0303"  # e.g., "my-awesome-bucket"
     s3_key = "BOSNYC_EDA_cleaned.parquet.zip"  # Path to the zip file in S3
 
     s3_path = f"s3://{s3_bucket}/{s3_key}"
