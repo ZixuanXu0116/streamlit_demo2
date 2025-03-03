@@ -5,6 +5,8 @@ import time
 import warnings
 warnings.filterwarnings("ignore")
 
+import s3fs
+import zipfile
 from datetime import datetime
 import holidays
 import plotly.express as px
@@ -12,7 +14,6 @@ import plotly.express as px
 # ML libraries
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
-from catboost import CatBoostRegressor
 from sklearn.ensemble import ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_percentage_error
 
@@ -21,7 +22,22 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_percenta
 # ---------------------------
 @st.cache_data
 def load_data():
-    df = pd.read_parquet("BOSNYC_EDA_cleaned.parquet")
+    # Update these to match your S3 bucket and file path
+    s3_bucket = "streamlittest0303"
+    s3_key = "BOSNYC_EDA_cleaned.parquet.zip"  # Path to the zip file in S3
+
+    s3_path = f"s3://{s3_bucket}/{s3_key}"
+
+    # Create a filesystem object for S3
+    fs = s3fs.S3FileSystem()
+
+    # Read the zip file directly from S3 into memory
+    with fs.open(s3_path, "rb") as f:
+        with zipfile.ZipFile(f, "r") as zip_ref:
+            zip_ref.extractall("extracted_data")
+
+    # Now read the Parquet file that was extracted
+    df = pd.read_parquet("extracted_data/BOSNYC_EDA_cleaned.parquet")
     df['shop_date'] = pd.to_datetime(df['shop_date'])
     df['depdate'] = pd.to_datetime(df['depdate'])
     return df
@@ -90,10 +106,9 @@ selected_optional_features = st.sidebar.multiselect(
 
 # 3.3) Model Selection
 st.sidebar.header("Model Selection")
-# Updated list: Random Forest and MLPRegressor are replaced with Extra Trees and Gradient Boosting.
 model_choice = st.sidebar.selectbox(
     "Select Model",
-    ["XGBoost", "Extra Trees", "LightGBM", "CatBoost", "Gradient Boosting"]
+    ["XGBoost", "Extra Trees", "LightGBM", "Gradient Boosting"]
 )
 
 # 3.4) Model Parameters with Plain-English Descriptions (each on separate lines)
@@ -150,21 +165,6 @@ elif model_choice == "LightGBM":
         "max_depth": st.sidebar.slider("Max Depth (-1 for no limit)", -1, 15, -1),
         "n_estimators": st.sidebar.slider("Number of Estimators", 50, 500, 100, step=10),
         "num_leaves": st.sidebar.slider("Num Leaves", 31, 255, 31)
-    }
-
-elif model_choice == "CatBoost":
-    st.sidebar.subheader("CatBoost Parameters")
-    st.sidebar.markdown(
-    """
-    **learning_rate**: Step size for each iteration. Too high and it may overshoot; too low and it learns slowly.  
-    **depth**: Depth of the tree. Higher depth captures more details but may overfit.  
-    **iterations**: Number of boosting iterations. More iterations can improve performance but take longer.
-    """
-    )
-    catboost_params = {
-        "learning_rate": st.sidebar.slider("Learning Rate", 0.01, 0.5, 0.1),
-        "depth": st.sidebar.slider("Depth", 3, 15, 6),
-        "iterations": st.sidebar.slider("Iterations", 50, 500, 100, step=10)
     }
 
 elif model_choice == "Gradient Boosting":
@@ -300,16 +300,7 @@ if st.sidebar.button("Train Model"):
             learning_rate=lightgbm_params["learning_rate"],
             max_depth=lightgbm_params["max_depth"],
             n_estimators=lightgbm_params["n_estimators"],
-            num_leaves=lightgbm_params["num_leaves"],
-            random_state=lightgbm_params["random_state"]
-        )
-    elif model_choice == "CatBoost":
-        model = CatBoostRegressor(
-            learning_rate=catboost_params["learning_rate"],
-            depth=catboost_params["depth"],
-            iterations=catboost_params["iterations"],
-            random_seed=catboost_params["random_seed"],
-            verbose=False
+            num_leaves=lightgbm_params["num_leaves"]
         )
     elif model_choice == "Gradient Boosting":
         model = GradientBoostingRegressor(
@@ -325,7 +316,7 @@ if st.sidebar.button("Train Model"):
     
     # Evaluate on validation set
     y_val_pred = model.predict(X_val)
-    rmse_val = mean_squared_error(y_val, y_val_pred, squared=False)
+    rmse_val = mean_squared_error(y_val, y_val_pred) ** 0.5
     r2_val = r2_score(y_val, y_val_pred)
     mape_val = mean_absolute_percentage_error(y_val, y_val_pred) * 100.0
 
@@ -351,7 +342,7 @@ if st.sidebar.button("Train Model"):
     
     # Evaluate on test set
     y_test_pred = model.predict(X_test)
-    rmse_test = mean_squared_error(y_test, y_test_pred, squared=False)
+    rmse_test = mean_squared_error(y_test, y_test_pred) ** 0.5
     r2_test = r2_score(y_test, y_test_pred)
     mape_test = mean_absolute_percentage_error(y_test, y_test_pred) * 100.0
 
