@@ -1,0 +1,9 @@
+streamlit
+pandas
+numpy
+holidays
+plotly
+xgboost
+lightgbm
+scikit-learn
+s3fs
