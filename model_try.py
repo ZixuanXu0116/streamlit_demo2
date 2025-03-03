@@ -12,9 +12,7 @@ import holidays
 import plotly.express as px
 
 # ML libraries
-from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
-from sklearn.ensemble import ExtraTreesRegressor, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_percentage_error
 
 # ---------------------------
@@ -23,7 +21,7 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_percenta
 @st.cache_data
 def load_data():
     # Update these to match your S3 bucket and file path
-    s3_bucket = "streamlittest0303"
+    s3_bucket = "<streamlittest0303>"  # e.g., "my-awesome-bucket"
     s3_key = "BOSNYC_EDA_cleaned.parquet.zip"  # Path to the zip file in S3
 
     s3_path = f"s3://{s3_bucket}/{s3_key}"
@@ -104,85 +102,22 @@ selected_optional_features = st.sidebar.multiselect(
     default=[]
 )
 
-# 3.3) Model Selection
-st.sidebar.header("Model Selection")
-model_choice = st.sidebar.selectbox(
-    "Select Model",
-    ["XGBoost", "Extra Trees", "LightGBM", "Gradient Boosting"]
+# 3.3) Random Forest Parameters
+st.sidebar.header("Random Forest Parameters")
+st.sidebar.markdown(
+"""
+**n_estimators**: Number of trees. More trees can improve performance but increase computation time.  
+**max_depth**: Maximum depth of trees. Deeper trees capture more details but may overfit.  
+**min_samples_split**: Minimum samples needed to split a node. Larger values make the tree more conservative.  
+**min_samples_leaf**: Minimum samples required at a leaf node. Higher values lead to smoother predictions.
+"""
 )
-
-# 3.4) Model Parameters with Plain-English Descriptions (each on separate lines)
-if model_choice == "XGBoost":
-    st.sidebar.subheader("XGBoost Parameters")
-    st.sidebar.markdown(
-    """
-    **learning_rate**: How fast the model learns. Lower values slow training and help avoid overfitting.  
-    **max_depth**: Maximum depth of each tree. More depth means more complexity but can overfit.  
-    **n_estimators**: Number of trees (boosting rounds). More trees may improve accuracy but take longer.  
-    **gamma**: Minimum loss reduction required to make a split. Bigger gamma means the split must be more significant.  
-    **subsample**: Fraction of training data used for each tree. Lower values can reduce overfitting.  
-    **colsample_bytree**: Fraction of features used for each tree. Lower values can help prevent overfitting.
-    """
-    )
-    xgb_params = {
-        "learning_rate": st.sidebar.slider("Learning Rate", 0.01, 0.5, 0.1),
-        "max_depth": st.sidebar.slider("Max Depth", 3, 15, 6),
-        "n_estimators": st.sidebar.slider("Number of Estimators", 50, 500, 100, step=10),
-        "gamma": st.sidebar.slider("Gamma", 0.0, 5.0, 0.0),
-        "subsample": st.sidebar.slider("Subsample", 0.5, 1.0, 1.0),
-        "colsample_bytree": st.sidebar.slider("Colsample by Tree", 0.5, 1.0, 1.0)
-    }
-
-elif model_choice == "Extra Trees":
-    st.sidebar.subheader("Extra Trees Parameters")
-    st.sidebar.markdown(
-    """
-    **n_estimators**: Number of trees. More trees can improve performance but increase computation time.  
-    **max_depth**: Maximum depth of trees. Deeper trees capture more details but may overfit.  
-    **min_samples_split**: Minimum samples needed to split a node. Larger values make the tree more conservative.  
-    **min_samples_leaf**: Minimum samples required at a leaf node. Higher values lead to smoother predictions.
-    """
-    )
-    extratrees_params = {
-        "n_estimators": st.sidebar.slider("Number of Estimators", 50, 500, 100, step=10),
-        "max_depth": st.sidebar.slider("Max Depth (0 for None)", 0, 15, 0),
-        "min_samples_split": st.sidebar.slider("Min Samples Split", 2, 10, 2),
-        "min_samples_leaf": st.sidebar.slider("Min Samples Leaf", 1, 10, 1)
-    }
-
-elif model_choice == "LightGBM":
-    st.sidebar.subheader("LightGBM Parameters")
-    st.sidebar.markdown(
-    """
-    **learning_rate**: Controls how fast the model learns. Lower values are safer but slower.  
-    **max_depth**: Maximum depth of trees. -1 means no limit; higher values capture more details but may overfit.  
-    **n_estimators**: Number of boosting rounds. More rounds can improve performance but take longer.  
-    **num_leaves**: Maximum number of leaves per tree. More leaves capture more patterns but risk overfitting.
-    """
-    )
-    lightgbm_params = {
-        "learning_rate": st.sidebar.slider("Learning Rate", 0.01, 0.5, 0.1),
-        "max_depth": st.sidebar.slider("Max Depth (-1 for no limit)", -1, 15, -1),
-        "n_estimators": st.sidebar.slider("Number of Estimators", 50, 500, 100, step=10),
-        "num_leaves": st.sidebar.slider("Num Leaves", 31, 255, 31)
-    }
-
-elif model_choice == "Gradient Boosting":
-    st.sidebar.subheader("Gradient Boosting Parameters")
-    st.sidebar.markdown(
-    """
-    **learning_rate**: How much each tree contributes. Lower values lead to more robust models but require more trees.  
-    **n_estimators**: Number of boosting rounds. More rounds can improve performance but may overfit if too high.  
-    **max_depth**: Maximum depth of each tree. Deeper trees can capture more info but are more prone to overfitting.  
-    **subsample**: Fraction of samples used for each tree. Lower values can help prevent overfitting.
-    """
-    )
-    gb_params = {
-        "learning_rate": st.sidebar.slider("Learning Rate", 0.01, 0.5, 0.1),
-        "n_estimators": st.sidebar.slider("Number of Estimators", 50, 500, 100, step=10),
-        "max_depth": st.sidebar.slider("Max Depth", 3, 15, 6),
-        "subsample": st.sidebar.slider("Subsample", 0.5, 1.0, 1.0)
-    }
+rf_params = {
+    "n_estimators": st.sidebar.slider("Number of Estimators", 50, 500, 100, step=10),
+    "max_depth": st.sidebar.slider("Max Depth (0 for None)", 0, 15, 0),
+    "min_samples_split": st.sidebar.slider("Min Samples Split", 2, 10, 2),
+    "min_samples_leaf": st.sidebar.slider("Min Samples Leaf", 1, 10, 1)
+}
 
 # ---------------------------
 # 4) Data Filtering & Aggregation
@@ -264,7 +199,7 @@ X_test.fillna(0, inplace=True)
 # 7) Model Training, Evaluation & Progress Bars
 # ---------------------------
 if st.sidebar.button("Train Model"):
-    st.header(f"Training {model_choice} Model")
+    st.header("Training Random Forest Model")
 
     # First progress bar: simulate training (0% to 50%)
     progress_bar = st.progress(0)
@@ -275,41 +210,14 @@ if st.sidebar.button("Train Model"):
         progress_bar.progress(i + 1)
         status_text.text(f"Training progress: {i + 1}%")
     
-    # Initialize model based on selection
-    if model_choice == "XGBoost":
-        model = XGBRegressor(
-            learning_rate=xgb_params["learning_rate"],
-            max_depth=xgb_params["max_depth"],
-            n_estimators=xgb_params["n_estimators"],
-            gamma=xgb_params["gamma"],
-            subsample=xgb_params["subsample"],
-            colsample_bytree=xgb_params["colsample_bytree"],
-            random_state=42,
-            objective='reg:squarederror'
-        )
-    elif model_choice == "Extra Trees":
-        model = ExtraTreesRegressor(
-            n_estimators=extratrees_params["n_estimators"],
-            max_depth=extratrees_params["max_depth"] if extratrees_params["max_depth"] != 0 else None,
-            min_samples_split=extratrees_params["min_samples_split"],
-            min_samples_leaf=extratrees_params["min_samples_leaf"],
-            random_state=42
-        )
-    elif model_choice == "LightGBM":
-        model = LGBMRegressor(
-            learning_rate=lightgbm_params["learning_rate"],
-            max_depth=lightgbm_params["max_depth"],
-            n_estimators=lightgbm_params["n_estimators"],
-            num_leaves=lightgbm_params["num_leaves"]
-        )
-    elif model_choice == "Gradient Boosting":
-        model = GradientBoostingRegressor(
-            learning_rate=gb_params["learning_rate"],
-            n_estimators=gb_params["n_estimators"],
-            max_depth=gb_params["max_depth"],
-            subsample=gb_params["subsample"],
-            random_state=42
-        )
+    # Initialize Random Forest
+    model = RandomForestRegressor(
+        n_estimators=rf_params["n_estimators"],
+        max_depth=rf_params["max_depth"] if rf_params["max_depth"] != 0 else None,
+        min_samples_split=rf_params["min_samples_split"],
+        min_samples_leaf=rf_params["min_samples_leaf"],
+        random_state=42
+    )
     
     # Fit model on training set
     model.fit(X_train, y_train)
@@ -352,7 +260,7 @@ if st.sidebar.button("Train Model"):
     st.write("MAPE:", f"{round(mape_test, 1)}%")
     
     # ---------------------------
-    # 8) Plotly Visualization: Actual vs Prediction on Test Set with Custom Colors
+    # 8) Plotly Visualization: Actual vs Prediction on Test Set
     # ---------------------------
     test_results = pd.DataFrame({
         "Actual": y_test,
@@ -390,9 +298,11 @@ if st.sidebar.button("Train Model"):
     )
     min_val = min(test_results["Actual"].min(), test_results["Predicted"].min())
     max_val = max(test_results["Actual"].max(), test_results["Predicted"].max())
-    fig.add_shape(type="line",
-                  x0=min_val, y0=min_val, x1=max_val, y1=max_val,
-                  line=dict(dash="dash", color="gray"))
+    fig.add_shape(
+        type="line",
+        x0=min_val, y0=min_val, x1=max_val, y1=max_val,
+        line=dict(dash="dash", color="gray")
+    )
     st.plotly_chart(fig)
     st.write(f"Within 10% (green): {perc_green}% | Over 10% (red): {perc_red}% | Under 10% (blue): {perc_blue}%")
     
@@ -409,4 +319,4 @@ if st.sidebar.button("Train Model"):
         st.dataframe(importance_df)
         st.bar_chart(importance_df.set_index("Feature"))
     except AttributeError:
-        st.write("The selected model does not provide feature importances.")
+        st.write("Random Forest does not provide feature importances.")
